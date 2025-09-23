@@ -2,10 +2,10 @@ import { APP_NAME } from '../config'
 
 import { Logger } from '../utils'
 
-import { TestRouter } from './test'
+import { RunnerRouter } from './runner'
 
 const Routes = [
-	{ path: '', router: TestRouter },
+	{ path: '/runners', router: RunnerRouter },
 ]
 
 Routes.init = (app) => {

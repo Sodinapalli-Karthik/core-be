@@ -9,6 +9,7 @@ import bodyParser from 'body-parser'
 import { FE_URL, APP_NAME, NODE_ENV } from '../config'
 
 import { connectDB } from './database'
+import { connectS3 } from './s3'
 import { Routes } from '../routes'
 import { sendResponse, Logger, logRequest, ASCII_ART } from '../utils'
 
@@ -16,12 +17,15 @@ export const InitializeApp = async () => {
 
 	const app = express()
 
+	// Initialize database and S3 connections
 	await connectDB()
+	await connectS3()
 
 	// set security HTTP headers
 	app.use(helmet())
 
-	app.use(bodyParser.json())
+	app.use(bodyParser.json({ limit: '50mb' }));
+	app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
 	//middleWares
 	app.use(json())
@@ -57,7 +61,7 @@ export const InitializeApp = async () => {
 
 	app.get('/', (req, res) => {
 		return res.send(`<pre>${ASCII_ART}<pre>`);
-	  });
+	});
 
 	app.use((req, res) => {
 		Logger.error('Page Not Found 🤗')

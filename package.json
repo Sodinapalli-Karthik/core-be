@@ -4,7 +4,7 @@
   "main": "server.js",
   "scripts": {
     "start": "babel-node .",
-    "dev": "nodemon --exec NODE_ENV=dev npm run start",
+    "dev": "nodemon --exec \"npm run start\"",
     "build": "rm -rf dist && babel . --out-dir dist --ignore node_modules && cp package.json dist",
     "serve": "node dist/."
   },
@@ -13,30 +13,32 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@babel/cli": "^7.18.10",
-    "@babel/core": "^7.18.10",
-    "@babel/node": "^7.18.10",
+    "@babel/cli": "^7.28.3",
+    "@babel/core": "^7.28.4",
+    "@babel/node": "^7.28.0",
     "@babel/plugin-proposal-class-properties": "^7.18.6",
     "@babel/plugin-proposal-object-rest-spread": "^7.20.7",
-    "@babel/preset-env": "^7.18.10",
-    "body-parser": "^1.20.2",
+    "@babel/preset-env": "^7.28.3",
+    "aws-sdk": "^2.1692.0",
+    "axios": "^1.12.2",
+    "body-parser": "^1.20.3",
     "cookie-parser": "^1.4.6",
-    "cookie-session": "^2.0.0",
+    "cookie-session": "^2.1.1",
     "cors": "^2.8.5",
     "crypto": "^1.0.1",
     "csurf": "^1.11.0",
-    "dayjs": "^1.11.10",
-    "dotenv": "^16.3.1",
-    "express": "^4.21.1",
-    "express-fileupload": "^1.4.3",
-    "express-session": "^1.17.3",
-    "helmet": "^7.0.0",
+    "dayjs": "^1.11.18",
+    "dotenv": "^16.6.1",
+    "dynamoose": "^4.0.1",
+    "express": "^4.21.2",
+    "express-fileupload": "^1.5.2",
+    "express-session": "^1.18.2",
+    "helmet": "^7.2.0",
     "joi": "^17.13.3",
-    "mongoose": "^8.9.3",
-    "multer": "^1.4.5-lts.1"
+    "multer": "^2.0.2"
   },
   "devDependencies": {
-    "eslint": "^9.17.0",
-    "nodemon": "^3.1.9"
+    "eslint": "^9.36.0",
+    "nodemon": "^3.1.10"
   }
 }

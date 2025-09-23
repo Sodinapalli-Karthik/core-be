@@ -3,6 +3,7 @@ import Joi from 'joi'
 import utc from 'dayjs/plugin/utc'
 
 import { ERRORS } from '../constants'
+import { Logger } from './logger'
 
 export const getUtcTime = (date = new Date()) => {
 	dayjs.extend(utc)
@@ -17,13 +18,15 @@ export const getUtcTime = (date = new Date()) => {
  * @param {ANY} error error message or object or any thing default set to null
  */
 export const sendResponse = (res, status, message, data = {}, error = null) => {
+	const currentTimeStampInUTC = getUtcTime()
+	Logger.info(currentTimeStampInUTC, status, message, error)
 	return res.status(status).json(
 		{
 			status,
 			message,
 			data,
 			error: ERRORS[error] ? ERRORS[error] : error,
-			currentTimeStampInUTC: getUtcTime()
+			currentTimeStampInUTC,
 		}
 	)
 }

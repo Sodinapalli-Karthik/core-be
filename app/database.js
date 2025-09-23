@@ -1,21 +1,41 @@
-// db.js
-const mongoose = require('mongoose');
-const { Logger } = require('../utils');
+// database.js
+import dynamoose from "dynamoose";
+const { Logger } = require("../utils");
 
-import { DB_URI, DATABASE_NAME } from '../config'
+import {
+  AWS_REGION,
+  AWS_ACCESS_KEY_ID,
+  AWS_SECRET_ACCESS_KEY,
+  DYNAMODB_ENDPOINT,
+} from "../config";
 
-// This function will be called explicitly to connect to the database
 export const connectDB = async () => {
   try {
-    await mongoose.connect(DB_URI, {
-      dbName: DATABASE_NAME,
-    });
-    Logger.success('Connected to MongoDB');
-  } catch (error) {
-    Logger.error('MongoDB connection error:', error);
-  }
-}
+    const dynamoDBConfig = {
+      region: AWS_REGION,
+      credentials: {
+        accessKeyId: AWS_ACCESS_KEY_ID,
+        secretAccessKey: AWS_SECRET_ACCESS_KEY,
+      },
+    };
 
-mongoose.connection.on('disconnected', () => {
-  Logger.info('Disconnected from MongoDB');
-});
+    if (DYNAMODB_ENDPOINT) {
+      Logger.info("Using local DynamoDB endpoint");
+      dynamoose.aws.ddb.local(DYNAMODB_ENDPOINT);
+    } else {
+      Logger.info(`Connecting to AWS DynamoDB in region: ${AWS_REGION}`);
+    }
+
+    const ddb = new dynamoose.aws.ddb.DynamoDB(dynamoDBConfig);
+    dynamoose.aws.ddb.set(ddb);
+
+    Logger.success(
+      `Connected to DynamoDB successfully (${
+        DYNAMODB_ENDPOINT ? "Local" : "AWS"
+      })`
+    );
+  } catch (error) {
+    Logger.error("DynamoDB connection error:", error);
+    throw error;
+  }
+};

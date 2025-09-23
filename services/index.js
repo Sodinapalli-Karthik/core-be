@@ -1,5 +1,8 @@
-import { WrapperService } from './mongoService'
+import { WrapperService } from "./dynamoService";
+import { S3Service } from "./s3Service";
 
-import {CRATE} from '../models'
+import { THREADS } from "../models";
 
-export const CrateService = WrapperService(CRATE)
+export { S3Service };
+
+export const QueueService = WrapperService(THREADS);
