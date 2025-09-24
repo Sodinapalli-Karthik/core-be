@@ -1,6 +1,9 @@
 // s3Service.js - All S3 operations
 import { getS3 } from '../app/s3';
 const { Logger } = require('../utils');
+import axios from 'axios'
+
+const isStream = (obj) => obj && typeof obj.pipe === 'function'
 
 export const S3Service = {
   // Upload file to S3
@@ -14,13 +17,76 @@ export const S3Service = {
         ContentType: contentType,
       };
 
-      const result = await s3.upload(params).promise();
-      Logger.info(`File uploaded successfully: ${result.Location}`);
+      // default managed upload (supports multipart)
+      const uploader = s3.upload ? s3.upload(params) : null
+      let result
+      if (uploader && typeof uploader.promise === 'function') {
+        result = await uploader.promise()
+      } else if (uploader && typeof uploader.then === 'function') {
+        result = await uploader
+      } else if (uploader && uploader.Location) {
+        result = uploader
+      } else {
+        // fallback: if using v3 wrapper we exposed above
+        result = await s3.upload(params, {})
+      }
+      Logger.info(`File uploaded successfully: ${result.Location || `s3://${params.Bucket}/${params.Key}`}`);
       return result;
     } catch (error) {
       Logger.error('S3 upload error:', error);
       throw error;
     }
+  },
+
+  // Upload with retries and tuned multipart options. Accepts Buffer or stream factory.
+  uploadWithRetries: async (bucketName, key, bodyOrFactory, contentType = 'application/octet-stream', maxRetries = 4) => {
+    const s3 = getS3();
+
+    const uploadOnce = async (body) => {
+      const params = { Bucket: bucketName, Key: key, Body: body, ContentType: contentType }
+      // tune partSize (10MB) and queueSize for multipart upload
+      if (s3.upload && typeof s3.upload === 'function') {
+        const up = s3.upload(params, { partSize: 10 * 1024 * 1024, queueSize: 4 })
+        if (up && typeof up.promise === 'function') return up.promise()
+        if (up && typeof up.then === 'function') return up
+        if (up && up.Location) return up
+      }
+      // v3 wrapper path
+      return s3.upload(params, { partSize: 10 * 1024 * 1024, queueSize: 4 })
+    }
+
+    let attempt = 0
+    let lastErr
+    while (attempt <= maxRetries) {
+      try {
+        attempt++
+        const body = typeof bodyOrFactory === 'function' ? await bodyOrFactory() : bodyOrFactory
+        const res = await uploadOnce(body)
+        Logger.info(`S3 upload success (attempt ${attempt}): ${res.Location}`)
+        return res
+      } catch (err) {
+        lastErr = err
+        Logger.error(`S3 upload attempt ${attempt} failed: ${err.message || err}`)
+        if (attempt > maxRetries) break
+        // exponential backoff
+        const backoff = Math.min(30000, 500 * Math.pow(2, attempt))
+        await new Promise(r => setTimeout(r, backoff))
+      }
+    }
+
+    Logger.error('S3 upload failed after retries', lastErr)
+    throw lastErr
+  },
+
+  // Download remote URL and upload to S3 with retries. bodyFactory recreates the stream each attempt.
+  uploadStreamFromUrl: async (bucketName, key, url, contentType = 'application/octet-stream', maxRetries = 4) => {
+    const factory = async () => {
+      const resp = await axios({ method: 'get', url, responseType: 'stream' })
+      // set contentType if available
+      return resp.data
+    }
+
+    return await module.exports.uploadWithRetries(bucketName, key, factory, contentType, maxRetries)
   },
 
   // Download file from S3

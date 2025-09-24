@@ -51,9 +51,8 @@ const ThreadSchema = new dynamoose.Schema(
     res:       { type: Object, default: {} },
     execution: { type: Array, schema: [ExecutionStep], default: [] },
 
-    createdAt: { type: Number },
-    updatedAt: { type: Number },
-    ttl:       { type: Number, ttl: true }      // epoch seconds
+  // createdAt and updatedAt are managed by the timestamps option below - do not declare them here
+  ttl:       { type: Number, ttl: true }      // epoch seconds
   },
   { 
     saveUnknown: false, 

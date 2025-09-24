@@ -1,0 +1,121 @@
+import { Logger } from '../utils'
+import axios from 'axios'
+
+const ASSEMBLY_KEY = process.env.ASSEMBLYAI_API_KEY
+const OPENAI_KEY = process.env.OPENAI_API_KEY
+
+const assemblyHeaders = () => ({
+  Authorization: `Bearer ${ASSEMBLY_KEY}`,
+  'Content-Type': 'application/json'
+})
+
+export const TranscriptionService = {
+  transcribe: async (s3Url, progressCb = () => {}) => {
+    if (!ASSEMBLY_KEY) throw new Error('ASSEMBLYAI_API_KEY not set')
+
+    Logger.info('Submitting transcription job to AssemblyAI for', s3Url)
+
+    // Create transcript
+    const createResp = await axios.post(
+      'https://api.assemblyai.com/v2/transcript',
+      {
+        audio_url: s3Url,
+        speaker_labels: true,
+        auto_chapters: false
+      },
+      { headers: assemblyHeaders() }
+    )
+
+    const id = createResp.data.id
+
+    // Polling loop with exponential backoff and limited retries
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms))
+    let attempt = 0
+    let delay = 2000
+    let transcription = null
+    while (true) {
+      attempt += 1
+      try {
+        await sleep(delay)
+        const statusResp = await axios.get(`https://api.assemblyai.com/v2/transcript/${id}`, { headers: assemblyHeaders() })
+        const data = statusResp.data
+        if (data.status === 'completed') {
+          transcription = data
+          progressCb(100)
+          break
+        }
+        if (data.status === 'error') {
+          throw new Error(`AssemblyAI error: ${data.error}`)
+        }
+
+        // best-effort progress: use audio_duration and polling attempts
+        const estimate = data.audio_duration ? Math.min(95, Math.floor((attempt * delay) / (data.audio_duration * 10) + 20)) : Math.min(95, 10 + attempt * 5)
+        progressCb(estimate)
+
+        // backoff growth
+        delay = Math.min(15000, delay * 1.5)
+        // continue polling
+      } catch (err) {
+        Logger.error('Polling error', err.message)
+        if (attempt >= 20) throw new Error('Transcription polling failed after multiple attempts')
+        // small backoff and retry
+        delay = Math.min(15000, delay * 1.5)
+      }
+    }
+
+    // Normalize transcription structure: extract utterances or segments with speaker labels
+    const result = {
+      duration: transcription.audio_duration || null,
+      segments: []
+    }
+
+    // AssemblyAI provides utterances when speaker_labels is true
+  if (Array.isArray(transcription.utterances) && transcription.utterances.length) {
+      result.segments = transcription.utterances.map(u => ({
+        speaker: `Speaker ${u.speaker}`,
+        start: u.start / 1000.0,
+        end: u.end / 1000.0,
+        text: u.text
+      }))
+    } else if (Array.isArray(transcription.words) && transcription.words.length) {
+      // fallback: group words into crude segments
+      result.segments = transcription.words.slice(0, 1000).map(w => ({ speaker: w.speaker || 'Speaker 1', start: w.start / 1000.0, end: w.end / 1000.0, text: w.text }))
+    } else {
+      // fallback to raw text
+      result.segments = [{ speaker: 'Speaker 1', start: 0, end: result.duration || 0, text: transcription.text || '' }]
+    }
+
+    return result
+  },
+
+  extractHighlights: async (transcription, topN = 3) => {
+    // If OPENAI is available, ask it to rank segments and return topN
+    const segments = transcription.segments || []
+    if (OPENAI_KEY && segments.length > 0) {
+      try {
+        const prompt = `You are given a list of transcript segments with speaker, start, end and text. Return the top ${topN} most important/highlight moments as a JSON array of objects with fields: start, end, speaker, text, score (0-1). Input: ${JSON.stringify(segments.slice(0, 30))}`
+
+        const resp = await axios.post('https://api.openai.com/v1/chat/completions', {
+          model: 'gpt-3.5-turbo',
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: 800,
+          temperature: 0.2
+        }, { headers: { Authorization: `Bearer ${OPENAI_KEY}` } })
+
+        const content = resp.data.choices?.[0]?.message?.content || ''
+        // try to parse JSON from content
+        const jsonStart = content.indexOf('[')
+        const json = jsonStart >= 0 ? content.slice(jsonStart) : content
+        const parsed = JSON.parse(json)
+        return parsed
+      } catch (err) {
+        Logger.error('OpenAI ranking failed, falling back to heuristic', err.message)
+      }
+    }
+
+    // Heuristic fallback: top N segments by word count
+    const scored = segments.map(s => ({ ...s, score: (s.text || '').split(/\s+/).length }))
+    scored.sort((a,b)=>b.score-a.score)
+    return scored.slice(0, topN).map(s => ({ start: s.start, end: s.end, speaker: s.speaker, text: s.text, score: s.score }))
+  }
+}
