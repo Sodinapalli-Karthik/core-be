@@ -10,6 +10,7 @@ import fs from 'fs'
 
 const emitter = new EventEmitter()
 const jobs = new Map()
+// transcriptMap removed; webhook-based flow is not used
 const metrics = {
   jobsCreated: 0,
   jobsCompleted: 0,
@@ -28,6 +29,58 @@ const createJobRecord = (payload) => ({
 })
 
 export const ProcessingService = {
+  // Record a socket connection for a job with optional metadata { userAgent, ip }
+  recordConnection: (jobId, socketId, connectedAtIso, meta = {}) => {
+    const job = jobs.get(jobId)
+    if (!job) return null
+    job.connectionLog = job.connectionLog || []
+    const entry = { socketId, connectedAt: connectedAtIso, disconnectedAt: null, meta }
+    job.connectionLog.push(entry)
+    // trim old entries by TTL before persisting
+    const trimmed = ProcessingService._trimConnections(job.connectionLog)
+    job.connectionLog = trimmed
+    emitter.emit('update', job)
+    // persist connection info if thread exists
+    try {
+      if (job.threadId) THREADS.update({ threadId: job.threadId }, { res: { connections: job.connectionLog } }).catch(e => {})
+    } catch (e) {
+      // ignore persistence failure
+    }
+    return entry
+  },
+
+  // Finalize a socket connection (set disconnectedAt) and accept meta if needed
+  finalizeConnection: (jobId, socketId, disconnectedAtIso, meta = {}) => {
+    const job = jobs.get(jobId)
+    if (!job || !job.connectionLog) return null
+    const entry = job.connectionLog.find(c => c.socketId === socketId && !c.disconnectedAt)
+    if (!entry) return null
+    entry.disconnectedAt = disconnectedAtIso
+    // merge meta
+    entry.meta = Object.assign({}, entry.meta || {}, meta || {})
+    // trim and persist
+    job.connectionLog = ProcessingService._trimConnections(job.connectionLog)
+    emitter.emit('update', job)
+    try {
+      if (job.threadId) THREADS.update({ threadId: job.threadId }, { res: { connections: job.connectionLog } }).catch(e => {})
+    } catch (e) {}
+    return entry
+  },
+
+  // Trim connection logs older than TTL (seconds). Keeps entries with connectedAt or disconnectedAt within TTL.
+  _trimConnections: (connections) => {
+    const ttl = parseInt(process.env.CONNECTION_LOG_TTL_SECONDS || String(7 * 24 * 60 * 60), 10)
+    if (!connections || !connections.length) return []
+    const cutoff = Date.now() - ttl * 1000
+    return connections.filter(c => {
+      try {
+        const connected = c.connectedAt ? new Date(c.connectedAt).getTime() : 0
+        const disconnected = c.disconnectedAt ? new Date(c.disconnectedAt).getTime() : 0
+        return (connected >= cutoff) || (disconnected >= cutoff)
+      } catch (e) { return false }
+    })
+  },
+
   createJob: (payload) => {
     const job = createJobRecord(payload)
     jobs.set(job.id, job)
@@ -113,7 +166,7 @@ export const ProcessingService = {
         }
       }, 2000)
 
-      const transcription = await TranscriptionService.transcribe(job.s3Url, (p) => {
+  const transcription = await TranscriptionService.transcribe(job.s3Url, (p) => {
         if (job.cancelRequested) throw new Error('Job cancelled')
         job.progress = Math.max(job.progress, p)
         emitter.emit('update', job)
@@ -123,7 +176,9 @@ export const ProcessingService = {
 
       clearInterval(progressInterval)
 
-  job.transcription = transcription
+  // continue with polling-based transcription result
+
+      job.transcription = transcription
 
       // Generate highlights (simple heuristic: sentences with most words)
       const highlights = TranscriptionService.extractHighlights(transcription)

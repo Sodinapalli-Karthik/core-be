@@ -7,6 +7,11 @@ import { getUtcTime, addHours, addMonths, getMinutesDiff, Logger, sendResponse }
 
 export const verifyToken = async (req, res, next) => {
 	try {
+		// Test bypass: set TEST_DISABLE_AUTH=1 in env to skip auth in integration tests
+		if (process.env.TEST_DISABLE_AUTH === '1') {
+			res.locals.userId = req.body?.userId || 'test-user'
+			return next()
+		}
 		const { token } = req.cookies
 		const { userId } = decryptToken(token)
 		const existingTokens = await TokenService.getOne({ token, userId, status: 'active' })

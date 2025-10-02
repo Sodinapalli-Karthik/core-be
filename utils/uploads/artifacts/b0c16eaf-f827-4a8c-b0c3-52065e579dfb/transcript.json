@@ -1,0 +1,29 @@
+{
+  "duration": 60,
+  "segments": [
+    {
+      "speaker": "Speaker 1",
+      "start": 0,
+      "end": 10,
+      "text": "Intro by host"
+    },
+    {
+      "speaker": "Speaker 2",
+      "start": 10,
+      "end": 25,
+      "text": "Guest responds"
+    },
+    {
+      "speaker": "Speaker 1",
+      "start": 25,
+      "end": 40,
+      "text": "Follow up"
+    },
+    {
+      "speaker": "Speaker 3",
+      "start": 40,
+      "end": 60,
+      "text": "Co-host closes"
+    }
+  ]
+}

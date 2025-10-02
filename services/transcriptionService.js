@@ -1,4 +1,4 @@
-import { Logger } from '../utils'
+import { Logger, formatTimeMs } from '../utils'
 import axios from 'axios'
 
 const ASSEMBLY_KEY = process.env.ASSEMBLYAI_API_KEY
@@ -10,22 +10,57 @@ const assemblyHeaders = () => ({
 })
 
 export const TranscriptionService = {
+  normalizeTranscript: (transcription) => {
+    if (!transcription) return { duration: 0, segments: [] }
+    const result = { duration: transcription.audio_duration || null, segments: [] }
+    if (Array.isArray(transcription.utterances) && transcription.utterances.length) {
+      result.segments = transcription.utterances.map(u => {
+        const startMs = Math.round((u.start || 0))
+        const endMs = Math.round((u.end || 0))
+        const startSec = startMs / 1000.0
+        const endSec = endMs / 1000.0
+        return {
+          speaker: `Speaker ${u.speaker}`,
+          start: startSec,
+          end: endSec,
+          start_hms: formatTimeMs(startMs),
+          end_hms: formatTimeMs(endMs),
+          text: u.text
+        }
+      })
+    } else if (Array.isArray(transcription.words) && transcription.words.length) {
+      result.segments = transcription.words.slice(0, 1000).map(w => {
+        const startMs = Math.round((w.start || 0))
+        const endMs = Math.round((w.end || 0))
+        return {
+          speaker: w.speaker || 'Speaker 1',
+          start: startMs / 1000.0,
+          end: endMs / 1000.0,
+          start_hms: formatTimeMs(startMs),
+          end_hms: formatTimeMs(endMs),
+          text: w.text
+        }
+      })
+    } else {
+  const startMs = 0
+  const endMs = result.duration ? Math.round((result.duration || 0) * 1000) : 0
+  result.segments = [{ speaker: 'Speaker 1', start: 0, end: result.duration || 0, start_hms: formatTimeMs(startMs), end_hms: formatTimeMs(endMs), text: transcription.text || '' }]
+    }
+    return result
+  },
   transcribe: async (s3Url, progressCb = () => {}) => {
-    if (!ASSEMBLY_KEY) throw new Error('ASSEMBLYAI_API_KEY not set')
+  if (!ASSEMBLY_KEY) throw new Error('ASSEMBLYAI_API_KEY not set')
 
     Logger.info('Submitting transcription job to AssemblyAI for', s3Url)
 
-    // Create transcript
-    const createResp = await axios.post(
-      'https://api.assemblyai.com/v2/transcript',
-      {
-        audio_url: s3Url,
-        speaker_labels: true,
-        auto_chapters: false
-      },
-      { headers: assemblyHeaders() }
-    )
+    // Create transcript (polling mode)
+    const createBody = {
+      audio_url: s3Url,
+      speaker_labels: true,
+      auto_chapters: false
+    }
 
+    const createResp = await axios.post('https://api.assemblyai.com/v2/transcript', createBody, { headers: assemblyHeaders() })
     const id = createResp.data.id
 
     // Polling loop with exponential backoff and limited retries
@@ -63,29 +98,8 @@ export const TranscriptionService = {
       }
     }
 
-    // Normalize transcription structure: extract utterances or segments with speaker labels
-    const result = {
-      duration: transcription.audio_duration || null,
-      segments: []
-    }
-
-    // AssemblyAI provides utterances when speaker_labels is true
-  if (Array.isArray(transcription.utterances) && transcription.utterances.length) {
-      result.segments = transcription.utterances.map(u => ({
-        speaker: `Speaker ${u.speaker}`,
-        start: u.start / 1000.0,
-        end: u.end / 1000.0,
-        text: u.text
-      }))
-    } else if (Array.isArray(transcription.words) && transcription.words.length) {
-      // fallback: group words into crude segments
-      result.segments = transcription.words.slice(0, 1000).map(w => ({ speaker: w.speaker || 'Speaker 1', start: w.start / 1000.0, end: w.end / 1000.0, text: w.text }))
-    } else {
-      // fallback to raw text
-      result.segments = [{ speaker: 'Speaker 1', start: 0, end: result.duration || 0, text: transcription.text || '' }]
-    }
-
-    return result
+  // Normalize and return
+  return TranscriptionService.normalizeTranscript(transcription)
   },
 
   extractHighlights: async (transcription, topN = 3) => {

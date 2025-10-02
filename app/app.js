@@ -1,4 +1,5 @@
 import express, { json } from 'express'
+import path from 'path'
 import helmet from 'helmet'
 import cors from 'cors'
 import csrf from 'csurf'
@@ -62,6 +63,12 @@ export const InitializeApp = async () => {
 	app.get('/', (req, res) => {
 		return res.send(`<pre>${ASCII_ART}<pre>`);
 	});
+
+	// Serve socket client HTML for convenience
+	app.get('/socket-client', (req, res) => {
+		const file = path.join(__dirname, '..', 'scripts', 'socketClient.html')
+		return res.sendFile(file)
+	})
 
 	app.use((req, res) => {
 		Logger.error('Page Not Found 🤗')

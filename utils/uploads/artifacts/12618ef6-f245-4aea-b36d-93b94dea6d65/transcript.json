@@ -1,0 +1,37 @@
+{
+  "duration": 60,
+  "segments": [
+    {
+      "speaker": "Speaker 1",
+      "start": 0,
+      "end": 10,
+      "start_hms": "00:00:00.000",
+      "end_hms": "00:00:10.000",
+      "text": "Intro by host"
+    },
+    {
+      "speaker": "Speaker 2",
+      "start": 10,
+      "end": 25,
+      "start_hms": "00:00:10.000",
+      "end_hms": "00:00:25.000",
+      "text": "Guest responds"
+    },
+    {
+      "speaker": "Speaker 1",
+      "start": 25,
+      "end": 40,
+      "start_hms": "00:00:25.000",
+      "end_hms": "00:00:40.000",
+      "text": "Follow up"
+    },
+    {
+      "speaker": "Speaker 3",
+      "start": 40,
+      "end": 60,
+      "start_hms": "00:00:40.000",
+      "end_hms": "00:01:00.000",
+      "text": "Co-host closes"
+    }
+  ]
+}

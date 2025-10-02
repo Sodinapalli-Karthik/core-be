@@ -86,3 +86,23 @@ export const getMinutesDiff = (date1, date2) => {
 	const minutes = Math.floor(diffInMilliseconds / (1000 * 60))
 	return minutes
 }
+
+/**
+ * Format milliseconds into HH:MM:SS.mmm exactly (hours padded to 2, milliseconds to 3)
+ * @param {number} ms milliseconds
+ * @returns {string} formatted string like "01:02:03.007"
+ */
+export const formatTimeMs = (ms) => {
+	const totalMs = Math.max(0, Math.floor(Number(ms) || 0))
+	const hours = Math.floor(totalMs / 3_600_000)
+	const minutes = Math.floor((totalMs % 3_600_000) / 60_000)
+	const seconds = Math.floor((totalMs % 60_000) / 1000)
+	const milliseconds = totalMs % 1000
+
+	const hh = String(hours).padStart(2, '0')
+	const mm = String(minutes).padStart(2, '0')
+	const ss = String(seconds).padStart(2, '0')
+	const mmm = String(milliseconds).padStart(3, '0')
+
+	return `${hh}:${mm}:${ss}.${mmm}`
+}

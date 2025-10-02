@@ -80,13 +80,23 @@ export const S3Service = {
 
   // Download remote URL and upload to S3 with retries. bodyFactory recreates the stream each attempt.
   uploadStreamFromUrl: async (bucketName, key, url, contentType = 'application/octet-stream', maxRetries = 4) => {
-    const factory = async () => {
-      const resp = await axios({ method: 'get', url, responseType: 'stream' })
-      // set contentType if available
-      return resp.data
+    try {
+      const resp = await axios({ method: 'get', url, responseType: 'arraybuffer' })
+      const buffer = Buffer.from(resp.data)
+      // reuse uploadFile path
+      const s3 = getS3()
+      const params = { Bucket: bucketName, Key: key, Body: buffer, ContentType: contentType }
+      const uploader = s3.upload ? s3.upload(params, { partSize: 10 * 1024 * 1024, queueSize: 4 }) : null
+      let result
+      if (uploader && typeof uploader.promise === 'function') result = await uploader.promise()
+      else if (uploader && typeof uploader.then === 'function') result = await uploader
+      else if (uploader && uploader.Location) result = uploader
+      else result = await s3.upload(params, {})
+      return result
+    } catch (err) {
+      Logger.error('uploadStreamFromUrl failed', err)
+      throw err
     }
-
-    return await module.exports.uploadWithRetries(bucketName, key, factory, contentType, maxRetries)
   },
 
   // Download file from S3

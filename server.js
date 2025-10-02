@@ -27,6 +27,12 @@ export const getIO = () => io
 				// on subscription, send current state and register
 				const job = ProcessingService.getJob(jobId)
 				if (job) socket.emit('update', job)
+
+				// record connection timestamp + metadata
+				const connectedAt = new Date().toISOString()
+				const meta = { userAgent: socket.handshake.headers['user-agent'], ip: socket.handshake.address }
+				const conn = ProcessingService.recordConnection(jobId, socket.id, connectedAt, meta)
+				try { socket.emit('connected', { socketId: socket.id, connectedAt, meta }) } catch (e) {}
 				const listener = (update) => {
 					if (update.id !== jobId) return
 					socket.emit('update', update)
@@ -37,12 +43,23 @@ export const getIO = () => io
 						} catch (e) { /* ignore */ }
 						// remove listener and disconnect this socket
 						ProcessingService.off(jobId, listener)
+						// finalize connection record with disconnect timestamp
+						const disconnectedAt = new Date().toISOString()
+						const meta2 = { userAgent: socket.handshake.headers['user-agent'], ip: socket.handshake.address }
+						ProcessingService.finalizeConnection(jobId, socket.id, disconnectedAt, meta2)
+						try { socket.emit('disconnected', { socketId: socket.id, disconnectedAt, meta: meta2 }) } catch (e) {}
 						try { socket.disconnect(true) } catch (e) { /* ignore */ }
 					}
 				}
 				ProcessingService.on(jobId, listener)
 
-				socket.on('disconnect', () => ProcessingService.off(jobId, listener))
+				socket.on('disconnect', () => {
+					ProcessingService.off(jobId, listener)
+					const disconnectedAt = new Date().toISOString()
+					const meta2 = { userAgent: socket.handshake.headers['user-agent'], ip: socket.handshake.address }
+					ProcessingService.finalizeConnection(jobId, socket.id, disconnectedAt, meta2)
+					try { socket.emit('disconnected', { socketId: socket.id, disconnectedAt, meta: meta2 }) } catch (e) {}
+				})
 				socket.on('cancel', async ({ jobId }) => {
 					try { await ProcessingService.cancel(jobId); socket.emit('cancelled', { jobId }) } catch (e) { socket.emit('error', { message: e.message }) }
 				})

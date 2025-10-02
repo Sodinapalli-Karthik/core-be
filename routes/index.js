@@ -9,14 +9,14 @@ const Routes = [
 ]
 
 Routes.init = (app) => {
-	try {
-		Routes.forEach(route => {
-			app.use([`/${APP_NAME}`, route.path].join(''), route.router)
-		})
-	}
-	catch (err) {
-		Logger.error(err)
-	}
+ 	try {
+ 		Routes.forEach(route => {
+ 			app.use([`/${APP_NAME}`, route.path].join(''), route.router)
+ 		})
+ 	}
+ 	catch (err) {
+ 		Logger.error(err)
+ 	}
 }
 
 export { Routes }

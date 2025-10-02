@@ -11,7 +11,7 @@ const controllers = require('../controllers')
 describe('End-to-end flow (unit)', function() {
   it('should create a job and return result after processing', async function() {
     // stub createJob and start and getJob
-    const fakeJob = { id: 'job-1', status: 'done', transcription: { segments: [{ speaker: 'Speaker 1', start:0, end:1, text:'hi' }] }, highlights: [{ start:0, end:1, speaker:'Speaker 1', text:'hi', score:1 }], transcriptUrl: 's3://x/transcript.json', highlightsUrl: 's3://x/highlights.json' }
+  const fakeJob = { id: 'job-1', status: 'done', transcription: { segments: [{ speaker: 'Speaker 1', start:0, end:1, start_hms: '00:00:00.000', end_hms: '00:00:01.000', text:'hi' }] }, highlights: [{ start:0, end:1, speaker:'Speaker 1', text:'hi', score:1 }], transcriptUrl: 's3://x/transcript.json', highlightsUrl: 's3://x/highlights.json' }
 
     const createStub = sinon.stub(ProcessingService, 'createJob').callsFake(() => fakeJob)
     const startStub = sinon.stub(ProcessingService, 'start').callsFake(() => Promise.resolve(fakeJob))

@@ -1,6 +1,7 @@
 import { Router } from 'express'
 
 import { ping, startProcessing, streamStatus, getResult } from '../controllers'
+import connectionsController from '../controllers/connectionsController'
 import { verifyToken } from '../middlewares/jwtVerification'
 
 // import { } from '../validations'
@@ -20,6 +21,9 @@ RunnerRouter.get('/status/:jobId', asyncWrapper(streamStatus))
 
 // Fetch final result JSON for a jobId
 RunnerRouter.get('/result/:jobId', asyncWrapper(getResult))
+
+// Fetch connection history for a jobId
+RunnerRouter.get('/connections/:jobId', asyncWrapper(connectionsController.getConnections))
 
 // Get presigned upload URL for client to upload directly to S3
 RunnerRouter.post('/presign', verifyToken, asyncWrapper(async (req, res) => {
