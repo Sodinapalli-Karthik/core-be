@@ -27,7 +27,19 @@ export const getIO = () => io
 				// on subscription, send current state and register
 				const job = ProcessingService.getJob(jobId)
 				if (job) socket.emit('update', job)
-				const listener = (update) => { if (update.id === jobId) socket.emit('update', update) }
+				const listener = (update) => {
+					if (update.id !== jobId) return
+					socket.emit('update', update)
+					// when job reaches a terminal state, notify and close socket
+					if (['done', 'failed', 'cancelled'].includes(update.status)) {
+						try {
+							socket.emit('completed', update)
+						} catch (e) { /* ignore */ }
+						// remove listener and disconnect this socket
+						ProcessingService.off(jobId, listener)
+						try { socket.disconnect(true) } catch (e) { /* ignore */ }
+					}
+				}
 				ProcessingService.on(jobId, listener)
 
 				socket.on('disconnect', () => ProcessingService.off(jobId, listener))

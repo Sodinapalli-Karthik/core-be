@@ -6,6 +6,7 @@ import { S3Service } from './s3Service'
 import { S3_BUCKET } from '../config'
 import { QueueService } from '.'
 import { THREADS } from '../models'
+import fs from 'fs'
 
 const emitter = new EventEmitter()
 const jobs = new Map()
@@ -35,10 +36,24 @@ export const ProcessingService = {
 
     // Persist initial job in DynamoDB THREADS table
     try {
+      const fd = payload.filedetails || { name: payload.s3Url || '', filetype: 'video', size: 0, s3url: payload.s3Url }
+      if (!fd.filetype) fd.filetype = 'video'
+      // attempt to infer size synchronously for local file URLs
+      try {
+        if ((!fd.size || fd.size === 0) && fd.s3url && typeof fd.s3url === 'string' && fd.s3url.startsWith('file://')) {
+          const localPath = fd.s3url.replace('file://', '')
+          if (fs.existsSync(localPath)) {
+            fd.size = fs.statSync(localPath).size
+          }
+        }
+      } catch (e) {
+        // ignore and leave size as-is (DB will accept 0 if still missing)
+      }
+      if (!fd.size) fd.size = fd.size || 0
       const thread = {
         userId: payload.userId || 'system',
         req: {
-          filedetails: payload.filedetails || { name: payload.s3Url || '', filetype: 'video', size: 0, s3url: payload.s3Url },
+          filedetails: fd,
           params: payload.params || {},
           service: 'transcription'
         },

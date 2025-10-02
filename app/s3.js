@@ -176,8 +176,24 @@ export const connectS3 = async () => {
         try {
           await s3Instance.listBuckets().promise()
           Logger.success(`Connected to AWS S3 successfully in region: ${AWS_REGION}`)
+          // verify configured bucket exists if provided
+          const targetBucket = process.env.S3_BUCKET
+          if (targetBucket) {
+            try {
+              // try a headObject on a non-existent key to verify bucket exists via listObjects
+              await client.send(new ListObjectsV2Command({ Bucket: targetBucket, MaxKeys: 1 }))
+            } catch (bucketErr) {
+              Logger.warning(`Configured S3_BUCKET '${targetBucket}' not accessible: ${bucketErr.message}. Falling back to LocalS3Adapter`)
+              const localDir = path.join(__dirname, '..', 'utils', 'uploads')
+              s3Instance = new LocalS3Adapter(localDir)
+              return s3Instance
+            }
+          }
         } catch (testError) {
-          Logger.warning('S3 connection configured but unable to test (may be due to permissions)')
+          Logger.warning('S3 connection configured but unable to test (may be due to permissions) — falling back to LocalS3Adapter')
+          const localDir = path.join(__dirname, '..', 'utils', 'uploads')
+          s3Instance = new LocalS3Adapter(localDir)
+          return s3Instance
         }
     } else {
       const localDir = path.join(__dirname, '..', 'utils', 'uploads')
